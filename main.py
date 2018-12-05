@@ -69,6 +69,7 @@ class data_img:
             hi = i//self.width
             i +=1
             yield (wi, hi)
+
     def set_bit(self, index, new_bit_value):
         px_index = index//3
         bit_index = index%3
@@ -94,9 +95,36 @@ class data_img:
             wi = (i//3)%self.width
             hi = (i//3)//self.width
             px = self.pixels[wi,hi]
-            for number in enumerate(px):
-                yield (i,list(bin(number[1])[2:])[-1])
-                i+=1
+            yield (i,list(bin(px[i%3])[2:])[-1])
+            i+=1
+
+    def store_bits(self, bitstring, start=0, bits_per_px=3):
+        total_px = self.width*self.height
+        wi = (start//3)%self.width
+        hi = (start//3)//self.width
+        i = start
+        j = 0
+        new_value = list(self.pixels[wi, hi][:start%bits_per_px])
+        while i < total_px*bits_per_px and j<len(bitstring):
+            wi = (i//3)%self.width
+            hi = (i//3)//self.width
+            px = self.pixels[wi,hi]
+            new_num = list(bin(px[i%3])[2:])
+            new_num[-1] = bitstring[j]
+            new_num = int(''.join(new_num), 2)
+            new_value.append(new_num)
+            i+=1
+            j+=1
+            if(len(new_value)%bits_per_px == 0):
+                self.pixels[wi, hi] = tuple(new_value)
+                new_value = []
+        if(len(new_value) > 0):
+            tmp = len(new_value)
+            for i in range(bits_per_px-tmp):
+                new_value.append(px[len(new_value)])
+            self.pixels[wi, hi] = tuple(new_value)
+        return self
+                
 
 
     def store_3bits_in_pixel(self, bitstring, x_index, y_index):
@@ -248,10 +276,11 @@ class data_img:
 
 
 if(__name__ == '__main__'):
-    f = data_img("new_thing.png").hide_text_in_image("this is a much longer bit of hidden text it is much longer much much longer").save("new_thing.png")
+    f = data_img("new_thing.png").hide_text_in_image("his is a much longer bit of hidden text it is much longer much much longer").save("new_thing.png")
     print(f.decode_text_from_image())
-    print(f.get_3bits_in_pixel(0,0))
-    print(f.get_3bits_in_pixel(1,0))
-    f.set_bit(0,'1')
-    a = f.map_over_bits(end=3)
+    f.store_bits('11', start=3)
+    a = f.map_over_bits()
+    i = 0
+    for i in range(10):
+        print(a.__next__())
 
