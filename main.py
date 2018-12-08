@@ -1,7 +1,7 @@
 import PIL
 from PIL import Image as img
 import urllib.request as url
-
+import base64
 import io
 import math
 import os
@@ -12,6 +12,11 @@ class binary_file:
         self.file = open(filename, 'rb')
         self.size = os.path.getsize(filename)
         self.current_pos = 0
+        print(len(self.file.read()))
+    def load_file(file_path):
+        self.file = open(io.BytesIO(url.urlopen(uri).read()), 'rb')
+        
+
 
     def __del__(self):
         self.file.close()
@@ -28,7 +33,8 @@ class binary_file:
         return self.filename
     def next_byte(self):
         try:
-            byte = bin(ord(self.file.read(1)))[2:]
+            byte = self.file.read(1)
+            byte = bin(ord(byte))[2:]
         except TypeError:
             return False
         return '0'*(8-len(byte))+byte
@@ -95,8 +101,12 @@ class data_img:
             wi = (i//3)%self.width
             hi = (i//3)//self.width
             px = self.pixels[wi,hi]
-            yield (i,list(bin(px[i%3])[2:])[-1])
+            yield str(list(bin(px[i%3])[2:])[-1])
             i+=1
+
+    def get_bits(self, start, end):
+        return ''.join(list(self.map_over_bits(start=start, end=end)))
+
 
     def store_bits(self, bitstring, start=0, bits_per_px=3):
         total_px = self.width*self.height
@@ -113,69 +123,71 @@ class data_img:
             new_num[-1] = bitstring[j]
             new_num = int(''.join(new_num), 2)
             new_value.append(new_num)
-            i+=1
-            j+=1
             if(len(new_value)%bits_per_px == 0):
                 self.pixels[wi, hi] = tuple(new_value)
                 new_value = []
+            i+=1
+            j+=1
         if(len(new_value) > 0):
             tmp = len(new_value)
             for i in range(bits_per_px-tmp):
                 new_value.append(px[len(new_value)])
             self.pixels[wi, hi] = tuple(new_value)
         return self
-                
 
-
-    def store_3bits_in_pixel(self, bitstring, x_index, y_index):
-        if(len(bitstring) < 3):
-            raise ValueError('bit string must be of length 3')
-        value = self.pixels[x_index, y_index]
-        new_value = list(value)
-        output = []
-        for number in enumerate(new_value):
-            bin_number = list(bin(number[1])[2:])
-            bin_number[-1] = bitstring[number[0]]
-            out = int(''.join(bin_number), 2)
-            new_value[number[0]] = out
-        self.pixels[x_index, y_index] = tuple(new_value)
-        return self
-
-    def get_3bits_in_pixel(self, x_index, y_index):
-        value = self.pixels[x_index, y_index]
-        bin_string = ''
-        for number in value:
-            bin_string+= bin(number)[2:][-1]
-        return bin_string
-
-
-
-    def encode_binary_file(self,filename, bits_per_px=3):
+    def encode_binary_file(self,filename, bits_per_px=3, bits_per_char=8, start=0):
         file = binary_file(filename)
         data = ''
         data+= data_img.encode_text(file.get_filename(), add_null=True)
-        data+= bin((file.get_size()))[2:]
-        flat_px = self.map_over_pixels()
-        pos = len(data)-1
-        start_px = pos//3
-        start_remander = pos%3
-        for wi, hi in flat_px:
-            self.store_3bits_in_pixel(data[:3], wi, hi)
-            data = data[3:]
-            if data == '':
-                break
-        new_start = self.map_over_bits(start_px)
+        bin_size= bin((file.get_size()))[2:]
+        bin_size = '0'*(len(bin_size)%32)+bin_size
+        data+=bin_size
+        with open(filename, 'rb') as f:
+            contents = f.read(4)
+            while contents:
+                print(str(base64.urlsafe_b64encode(contents))[2:-1])
+                data += data_img.encode_text(str(base64.urlsafe_b64encode(contents))[2:-1], add_null=False)
+                contents = f.read(4)
+        pos = start+len(data)-1
+        self.resize_image_to_data(len(data))
+        self.store_bits(data, start=start)
+        return self
 
-        for wi, hi, in new_start:
-            pass
+    def decode_binary_file(self, start=0):
+        pos = start
+        char = ''
+        filename = ''
+        size = ''
+        file_contents = ""
+        while char != '\0':
+            byte = list(self.map_over_bits(start=pos, end=pos+8))
+            char = chr(int(''.join(byte), 2))
+            filename+=char
+            pos +=8
+        pos-=8
+        char = ''
+        filename = filename[:-1]
+        bin_size = self.get_bits(pos, pos+32)
+        size = int(bin_size, 2)
+        pos+=32
+        
+        with open(filename, 'wb') as f:
+            char8 = ""
+            for i in range((size*8)-1):
+                byte = list(self.map_over_bits(start=pos, end=pos+8))
+                char = chr(int(''.join(byte), 2))
+                
+                if(i%8 == 0 and i!=0):
+                    print(char8)
+                    f.write(base64.urlsafe_b64decode(char8))
+                    char8 = ''
+                char8+=char
+                
+                pos = pos+8
+        return byte
+        
 
-
-
-
-
-
-
-
+        
 
 
     def encode_text(text, bits_per_char=8, add_null=True):
@@ -186,7 +198,6 @@ class data_img:
             bin_value = bin(ord(char))[2:]
             return '0'*(bits_per_char-len(bin_value))+bin_value
         out = ''.join(map(convert_to_padded_binary, text))
-        print(out)
         return out
         
     def decode_text(byte_array):
@@ -229,7 +240,10 @@ class data_img:
         needed_pixels = math.ceil(data_size_bits+15/3) #fifteen bits from overhead
         width, height = self.pil_image.size
         scale = math.ceil(math.sqrt(needed_pixels/(width*height)))
+        print("scale is ",scale)
         self.pil_image = self.pil_image.resize((width*scale, height*scale), resize_method)
+        self.pixels = self.pil_image.load()
+        self.width, self.height = self.pil_image.size
         return self
 
     def calculate_storage_size(self):
@@ -276,11 +290,8 @@ class data_img:
 
 
 if(__name__ == '__main__'):
-    f = data_img("new_thing.png").hide_text_in_image("his is a much longer bit of hidden text it is much longer much much longer").save("new_thing.png")
-    print(f.decode_text_from_image())
-    f.store_bits('11', start=3)
-    a = f.map_over_bits()
-    i = 0
-    for i in range(10):
-        print(a.__next__())
-
+    f = data_img("https://thenypost.files.wordpress.com/2018/05/180516-woman-mauled-by-angry-wiener-dogs-feature.jpg?quality=90&strip=all&w=618&h=410&crop=1")
+    f.hide_text_in_image("this is some text").save("file.png")
+    print('\n'*3)
+    a = data_img("file.png").decode_text_from_image()
+    print(a)
