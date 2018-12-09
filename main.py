@@ -139,15 +139,13 @@ class data_img:
         file = binary_file(filename)
         data = ''
         data+= data_img.encode_text(file.get_filename(), add_null=True)
-        bin_size= bin((file.get_size()))[2:]
-        bin_size = '0'*(len(bin_size)%32)+bin_size
-        data+=bin_size
         with open(filename, 'rb') as f:
             contents = f.read(4)
             while contents:
                 print(str(base64.urlsafe_b64encode(contents))[2:-1])
                 data += data_img.encode_text(str(base64.urlsafe_b64encode(contents))[2:-1], add_null=False)
                 contents = f.read(4)
+        data+=('0'*8)
         pos = start+len(data)-1
         self.resize_image_to_data(len(data))
         self.store_bits(data, start=start)
@@ -164,19 +162,19 @@ class data_img:
             char = chr(int(''.join(byte), 2))
             filename+=char
             pos +=8
-        pos-=8
+        
         char = ''
         filename = filename[:-1]
-        bin_size = self.get_bits(pos, pos+32)
-        size = int(bin_size, 2)
-        pos+=32
-        
         with open(filename, 'wb') as f:
             char8 = ""
-            for i in range((size*8)-1):
+            char = ""
+            i=0
+            while True:
                 byte = list(self.map_over_bits(start=pos, end=pos+8))
                 char = chr(int(''.join(byte), 2))
-                
+                if(char == '\0'):
+                    print("break")
+                    break
                 if(i%8 == 0 and i!=0):
                     print(char8)
                     f.write(base64.urlsafe_b64decode(char8))
@@ -184,6 +182,7 @@ class data_img:
                 char8+=char
                 
                 pos = pos+8
+                i+=1
         return byte
         
 
@@ -291,7 +290,7 @@ class data_img:
 
 if(__name__ == '__main__'):
     f = data_img("https://thenypost.files.wordpress.com/2018/05/180516-woman-mauled-by-angry-wiener-dogs-feature.jpg?quality=90&strip=all&w=618&h=410&crop=1")
-    f.hide_text_in_image("this is some text").save("file.png")
+    f.encode_binary_file("s.png").save("file.png")
     print('\n'*3)
-    a = data_img("file.png").decode_text_from_image()
+    a = data_img("file.png").decode_binary_file()
     print(a)
