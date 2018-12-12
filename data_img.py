@@ -93,15 +93,25 @@ class data_img:
 
     def encode_binary_file(self,filename, bits_per_px=3, bits_per_char=8, start=0):
         data = ''
+        print("loading and coping file this could take a while")
+        try:
+            f = open(filename, 'rb')
+        except OSError:
+            f = io.BytesIO(url.urlopen(filename).read())
+        filename = filename.split('/')[-1].split('?')[0]
+
         data+= data_img.encode_text(filename, add_null=True)
-        with open(filename, 'rb') as f:
+        
+        contents = f.read(4)
+        while contents:
+            data += data_img.encode_text(str(base64.urlsafe_b64encode(contents))[2:-1], add_null=False)
             contents = f.read(4)
-            while contents:
-                data += data_img.encode_text(str(base64.urlsafe_b64encode(contents))[2:-1], add_null=False)
-                contents = f.read(4)
+        f.close()
         data+=('0'*8)
         pos = start+len(data)-1
+        print("resizeing_image")
         self.resize_image_to_data(len(data))
+        print("storing_bits could take a while")
         self.store_bits(data, start=start)
         return self
 
@@ -116,9 +126,9 @@ class data_img:
             char = chr(int(''.join(byte), 2))
             filename+=char
             pos +=8
-        
         char = ''
         filename = filename[:-1]
+        print("found file (%s) now decoding"%filename)
         with open(filename, 'wb') as f:
             char8 = ""
             char = ""
@@ -137,6 +147,7 @@ class data_img:
                 
                 pos = pos+8
                 i+=1
+        print("%s is created and populated"%filename)
         return byte
         
 
@@ -199,7 +210,7 @@ class data_img:
 
 if(__name__ == '__main__'):
     f = data_img("https://thenypost.files.wordpress.com/2018/05/180516-woman-mauled-by-angry-wiener-dogs-feature.jpg?quality=90&strip=all&w=618&h=410&crop=1")
-    f.encode_binary_file("doc.txt").save("file.png")
+    f.encode_binary_file("https://www.washingtonpost.com/rf/image_1484w/2010-2019/WashingtonPost/2018/04/11/Investigative/Images/DogAuction_SG28.JPG?t=20170517").save("file.png")
     print('\n'*3)
     a = data_img("file.png").decode_binary_file()
     print(a)
