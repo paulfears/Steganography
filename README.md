@@ -1,4 +1,4 @@
-# python_data_hiding
+# Steganography
 a simple bit of Steganography written in python allows for hiding data inside images
 <hr>
 <h2>description:</h2>
